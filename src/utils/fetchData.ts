@@ -1,7 +1,8 @@
-import { useCallback, useState } from "react";
-import { GiftRes, ChildrenRes } from "types";
+import { useState } from "react";
+import { GiftsRes, ChildrenRes } from "types";
 
-export const BASE_URL = "http://localhost:3001";
+const BASE_URL = "http://localhost:3001";
+
 export enum HttpMethods {
   GET = "GET",
   POST = "POST",
@@ -9,62 +10,73 @@ export enum HttpMethods {
   DELETE = "DELETE",
 }
 
-export type ListGiftsRes = {
-  giftsList: GiftRes[];
-};
-
-export type SendReqType<T> = (
-  method: HttpMethods,
-  restUrl: string,
-  body?: T | undefined
-) => Promise<void>;
-
-type Data = ChildrenRes | GiftRes[] | GiftRes | null;
-
-interface UseFetchReturnValues {
-  isLoading: boolean;
-  sendReq: SendReqType<Data>;
-  data: Data;
+export interface UseFetchRes {
+  data: Data | null;
+  error: any;
+  loading: Boolean;
+  getAPIData: ApiCall;
 }
 
-export const useFetch = (): UseFetchReturnValues => {
-  const [isLoading, setIsLoading] = useState(false);
-  const [data, setData] = useState<Data>(null);
+type Data = ChildrenRes | GiftsRes;
+type ApiCall = <T>(path?: string, reqBody?: T) => Promise<void>;
+type FetchResWithoutData = Omit<UseFetchRes, "data">;
 
-  const sendReq = useCallback(
-    async <T>(
-      method: HttpMethods = HttpMethods.GET,
-      restUrl?: string,
-      body?: T | undefined
-    ) => {
-      setIsLoading(true);
-      const config = {
-        method,
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: body ? JSON.stringify(body) : null,
-      };
+interface Arguments<T> {
+  restUrl?: string;
+  method?: HttpMethods;
+  body?: T | undefined;
+}
+export interface FetchChildrenRes extends FetchResWithoutData {
+  data: ChildrenRes | null;
+}
+export interface FetchGiftsRes extends FetchResWithoutData {
+  data: GiftsRes | null;
+}
 
-      try {
-        const result = await fetch(`${BASE_URL}${restUrl}`, config);
+export const useFetch = <T>({
+  restUrl,
+  method = HttpMethods.GET,
+  body,
+}: Arguments<T>): UseFetchRes => {
+  const [data, setData] = useState<Data | null>(null);
+  const [error, setError] = useState<any>();
+  const [loading, setLoading] = useState<boolean>(false);
 
-        if (!result.ok) {
-          throw new Error("Request failed!");
-        }
-
-        setData(await result.json());
-      } catch (err) {
-        throw new Error("Something went wrong!");
+  const getAPIData: ApiCall = async (path = restUrl, reqBody) => {
+    setLoading(true);
+    const config = {
+      method,
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: reqBody
+        ? JSON.stringify(reqBody)
+        : body
+        ? JSON.stringify(body)
+        : null,
+    };
+    try {
+      const apiResponse = await fetch(`${BASE_URL}${path ?? ""}`, config);
+      const json = (await apiResponse.json()) as Data | null;
+      if (!json) {
+        throw new Error("Please try again");
       }
-      setIsLoading(false);
-    },
-    []
-  );
+
+      setData(json);
+    } catch (error) {
+      setError(error);
+    }
+    setLoading(false);
+  };
+
+  // useEffect(() => {
+  //   getAPIData();
+  // }, []);
 
   return {
-    isLoading,
-    sendReq,
     data,
+    error,
+    loading,
+    getAPIData,
   };
 };
